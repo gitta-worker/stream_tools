@@ -4,6 +4,7 @@ import argparse
 import copy
 import json
 import ssl
+import sys
 import threading
 import time
 import urllib.error
@@ -26,18 +27,23 @@ from app_config import (
 )
 
 
-APP_DIR = Path(__file__).resolve().parent
+if getattr(sys, "frozen", False):
+    APP_DIR = Path(sys.executable).resolve().parent
+    ASSET_DIR = Path(getattr(sys, "_MEIPASS", APP_DIR))
+else:
+    APP_DIR = Path(__file__).resolve().parent
+    ASSET_DIR = APP_DIR
 CONFIG_PATH = APP_DIR / "config.json"
 STATIC_FILES = {
-    "/": (APP_DIR / "index.html", "text/html; charset=utf-8"),
+    "/": (ASSET_DIR / "index.html", "text/html; charset=utf-8"),
     "/translation.js": (
-        APP_DIR / "translation.js",
+        ASSET_DIR / "translation.js",
         "text/javascript; charset=utf-8",
     ),
-    "/translation.css": (APP_DIR / "translation.css", "text/css; charset=utf-8"),
-    "/setup": (APP_DIR / "setup.html", "text/html; charset=utf-8"),
-    "/setup.js": (APP_DIR / "setup.js", "text/javascript; charset=utf-8"),
-    "/setup.css": (APP_DIR / "setup.css", "text/css; charset=utf-8"),
+    "/translation.css": (ASSET_DIR / "translation.css", "text/css; charset=utf-8"),
+    "/setup": (ASSET_DIR / "setup.html", "text/html; charset=utf-8"),
+    "/setup.js": (ASSET_DIR / "setup.js", "text/javascript; charset=utf-8"),
+    "/setup.css": (ASSET_DIR / "setup.css", "text/css; charset=utf-8"),
 }
 
 
@@ -121,6 +127,55 @@ def translate_ja_to_en(text: str, config: dict[str, Any] | None = None) -> str:
     return str(payload["translations"][0]["text"])
 
 
+def translate_with_google(text: str) -> str:
+    """Translate using Google's undocumented, keyless web endpoint.
+
+    This endpoint is intentionally isolated so it can be replaced if Google
+    changes it. It is not covered by the Google Cloud Translation API SLA.
+    """
+    query = urllib.parse.urlencode(
+        {
+            "client": "dict-chrome-ex",
+            "sl": "ja",
+            "tl": "en",
+            "q": text,
+        }
+    )
+    request = urllib.request.Request(
+        f"https://clients5.google.com/translate_a/t?{query}",
+        headers={"User-Agent": "Mozilla/5.0"},
+    )
+    with urllib.request.urlopen(
+        request,
+        timeout=20,
+        context=ssl.create_default_context(cafile=certifi.where()),
+    ) as response:
+        payload = json.loads(response.read().decode("utf-8"))
+    if isinstance(payload, list):
+        translated = "".join(str(segment) for segment in payload if segment)
+    elif isinstance(payload, dict):
+        translated = "".join(
+            str(sentence.get("trans", "")) for sentence in payload.get("sentences", [])
+        )
+    else:
+        raise RuntimeError("Google translation returned an unexpected response")
+    if not translated:
+        raise RuntimeError("Google translation returned an empty response")
+    return translated
+
+
+def translate_text(text: str, config: dict[str, Any] | None = None) -> str:
+    active_config = config or runtime_config
+    provider = active_config["translation"]["provider"]
+    if provider == "none":
+        return ""
+    if provider == "deepl":
+        return translate_ja_to_en(text, active_config)
+    if provider == "google":
+        return translate_with_google(text)
+    raise RuntimeError(f"Unsupported translation provider: {provider}")
+
+
 def find_microphone_index(config: dict[str, Any], sr_module: Any) -> int | None:
     speech = config["speech"]
     configured_index = speech["microphone_device_index"]
@@ -151,7 +206,6 @@ def recognition_loop(config: dict[str, Any] | None = None) -> None:
 
     active_config = config or runtime_config
     speech = active_config["speech"]
-    features = active_config["features"]
     recognizer = sr.Recognizer()
     recognizer.dynamic_energy_threshold = True
     recognizer.pause_threshold = speech["pause_threshold"]
@@ -206,16 +260,19 @@ def recognition_loop(config: dict[str, Any] | None = None) -> None:
 
                     print(f"[translation] JA: {text_ja}", flush=True)
                     text_en = ""
-                    if features["deepl_translation"]:
+                    translation_failed = False
+                    if active_config["translation"]["provider"] != "none":
                         state.update(status="translating")
                         try:
-                            text_en = translate_ja_to_en(text_ja, active_config)
+                            text_en = translate_text(text_ja, active_config)
                         except (RuntimeError, KeyError, urllib.error.URLError) as exc:
-                            state.update(status="translation_error")
-                            print(f"[translation] DeepL error: {exc}", flush=True)
-                            continue
+                            translation_failed = True
+                            provider = active_config["translation"]["provider"]
+                            print(f"[translation] {provider} error: {exc}", flush=True)
 
                     state.publish(text_ja, text_en)
+                    if translation_failed:
+                        state.update(status="translation_error")
                     if text_en:
                         print(f"[translation] EN: {text_en}", flush=True)
         except (OSError, ValueError) as exc:
@@ -227,10 +284,38 @@ def recognition_loop(config: dict[str, Any] | None = None) -> None:
 def microphone_names() -> list[dict[str, Any]]:
     import speech_recognition as sr
 
-    return [
-        {"index": index, "name": name}
-        for index, name in enumerate(sr.Microphone.list_microphone_names())
-    ]
+    audio = sr.Microphone.get_pyaudio().PyAudio()
+    try:
+        try:
+            default_info = audio.get_default_input_device_info()
+            default_index = int(default_info["index"])
+            preferred_host_api = int(default_info["hostApi"])
+        except OSError:
+            default_index = None
+            preferred_host_api = None
+        devices = []
+        for index in range(audio.get_device_count()):
+            info = audio.get_device_info_by_index(index)
+            input_channels = int(info.get("maxInputChannels", 0))
+            host_api = int(info.get("hostApi", -1))
+            if input_channels <= 0 or (
+                preferred_host_api is not None and host_api != preferred_host_api
+            ):
+                continue
+            devices.append(
+                {
+                    "index": index,
+                    "name": str(info.get("name", f"Input {index}")),
+                    "input_channels": input_channels,
+                    "is_default": index == default_index,
+                    "host_api": str(
+                        audio.get_host_api_info_by_index(host_api).get("name", "")
+                    ),
+                }
+            )
+        return devices
+    finally:
+        audio.terminate()
 
 
 class TranslationHandler(BaseHTTPRequestHandler):

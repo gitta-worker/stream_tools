@@ -13,6 +13,7 @@
             <p class="eyebrow">LOCAL STREAMING TOOL</p>
             <h1>翻訳字幕 初期設定</h1>
             <p>使用する機能と、このPCの接続先を設定します。設定はPC内にのみ保存されます。</p>
+            <p class="legend"><span class="badge required">必須</span> 常に必要　<span class="badge conditional">条件付き必須</span> 機能を使う場合だけ必要　<span class="badge optional">任意</span> 空欄でも動作</p>
         </header>
 
         <form id="setup-form">
@@ -20,7 +21,6 @@
                 <h2>使用する機能</h2>
                 <div class="option-grid">
                     <label><input type="checkbox" data-path="features.speech_recognition"> 音声認識</label>
-                    <label><input type="checkbox" data-path="features.deepl_translation"> DeepL翻訳</label>
                     <label><input type="checkbox" data-path="features.show_japanese"> 日本語字幕を表示</label>
                     <label><input type="checkbox" data-path="features.show_english"> 英語字幕を表示</label>
                     <label><input type="checkbox" data-path="features.launch_onecomme"> わんコメを起動</label>
@@ -29,14 +29,17 @@
                 </div>
             </section>
 
-            <section>
+            <section id="speech-section">
                 <div class="section-heading">
-                    <h2>音声認識</h2>
+                    <div><h2>音声認識 <span class="badge conditional">使用時に必須</span></h2><p class="hint">音声認識を使わない場合、この項目は設定不要です。</p></div>
                     <button type="button" id="load-microphones" class="secondary">マイク一覧を取得</button>
                 </div>
-                <label>マイク名（部分一致）<input data-path="speech.microphone_device_name" list="microphones"></label>
-                <datalist id="microphones"></datalist>
-                <label>マイク番号<input data-path="speech.microphone_device_index" type="number" min="0" placeholder="未指定"></label>
+                <label>使用するマイク
+                    <select id="microphone-select" data-path="speech.microphone_device_index">
+                        <option value="">Windowsの既定の入力デバイス</option>
+                    </select>
+                </label>
+                <p id="microphone-help" class="hint">一覧には入力可能なデバイスだけを「番号: 名前」で表示します。</p>
                 <div class="field-grid">
                     <label>無音校正（秒）<input data-path="speech.ambient_noise_duration" type="number" min="0" max="30" step="0.1"></label>
                     <label>発話終了待ち（秒）<input data-path="speech.pause_threshold" type="number" min="0.1" max="10" step="0.1"></label>
@@ -47,24 +50,35 @@
             </section>
 
             <section>
-                <h2>DeepL</h2>
-                <label>認証キー<input data-path="translation.deepl_auth_key" type="password" autocomplete="new-password" placeholder="保存済みのキーは表示しません"></label>
-                <p id="key-status" class="hint"></p>
-                <label>API URL<input data-path="translation.deepl_api_url" placeholder="空欄ならキーからFree / Proを自動判定"></label>
+                <h2>翻訳 <span class="badge optional">任意</span></h2>
+                <label>翻訳サービス
+                    <select id="translation-provider" data-path="translation.provider">
+                        <option value="none">翻訳しない</option>
+                        <option value="google">Google翻訳（キー不要・簡易）</option>
+                        <option value="deepl">DeepL API</option>
+                    </select>
+                </label>
+                <p id="google-warning" class="notice">Google翻訳のキー不要方式は非公式です。Google側の仕様変更により利用できなくなる場合があります。</p>
+                <div id="deepl-fields">
+                    <label>DeepL認証キー <span class="badge conditional">DeepL使用時に必須</span><input data-path="translation.deepl_auth_key" type="password" autocomplete="new-password" placeholder="保存済みのキーは表示しません"></label>
+                    <p id="key-status" class="hint"></p>
+                    <label>API URL <span class="badge optional">任意</span><input data-path="translation.deepl_api_url" placeholder="空欄ならキーからFree / Proを自動判定"></label>
+                </div>
             </section>
 
             <section>
-                <h2>外部アプリ</h2>
-                <label>OBS実行ファイル<input data-path="apps.obs_exe"></label>
-                <label>OBSプロファイル<input data-path="apps.obs_profile"></label>
-                <label>わんコメ実行ファイル<input data-path="apps.onecomme_exe"></label>
-                <label>TanuEsa実行ファイル<input data-path="apps.tanuesa_exe"></label>
+                <h2>外部アプリ <span class="badge optional">任意</span></h2>
+                <p class="hint">「使用する機能」で起動を有効にしたアプリだけ、実行ファイルの指定が必要です。</p>
+                <label>OBS実行ファイル <span class="badge conditional">OBS起動時に必須</span><input data-path="apps.obs_exe"></label>
+                <label>OBSプロファイル <span class="badge optional">任意</span><input data-path="apps.obs_profile" placeholder="空欄ならOBS側の前回使用プロファイル"></label>
+                <label>わんコメ実行ファイル <span class="badge conditional">わんコメ起動時に必須</span><input data-path="apps.onecomme_exe"></label>
+                <label>TanuEsa実行ファイル <span class="badge conditional">TanuEsa起動時に必須</span><input data-path="apps.tanuesa_exe"></label>
             </section>
 
             <section>
                 <div class="section-heading">
                     <div>
-                        <h2>追加アプリ</h2>
+                        <h2>追加アプリ <span class="badge optional">任意</span></h2>
                         <p class="hint">配信時に一緒に起動したい任意のアプリを追加できます。</p>
                     </div>
                     <button type="button" id="add-custom-app" class="secondary">起動欄を追加</button>
@@ -73,7 +87,7 @@
             </section>
 
             <section>
-                <h2>ローカルサーバー</h2>
+                <h2>ローカルサーバー <span class="badge required">必須</span></h2>
                 <div class="field-grid">
                     <label>ホスト<input data-path="server.host" readonly></label>
                     <label>ポート<input data-path="server.port" type="number" min="1" max="65535"></label>

@@ -8,6 +8,7 @@ import app_config
 
 def valid_config() -> dict:
     config = copy.deepcopy(app_config.DEFAULT_CONFIG)
+    config["translation"]["provider"] = "deepl"
     config["translation"]["deepl_auth_key"] = "secret"
     config["apps"].update(
         {
@@ -62,6 +63,33 @@ class AppConfigTests(unittest.TestCase):
 
         with self.assertRaises(app_config.ConfigError):
             app_config.validate_config(config)
+
+    def test_google_translation_does_not_require_key(self) -> None:
+        config = valid_config()
+        config["translation"]["provider"] = "google"
+        config["translation"]["deepl_auth_key"] = ""
+
+        app_config.validate_config(config)
+
+    def test_obs_profile_is_optional(self) -> None:
+        config = valid_config()
+        config["apps"]["obs_profile"] = ""
+
+        app_config.validate_config(config)
+
+    def test_version_one_deepl_setting_is_migrated(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "config.json"
+            path.write_text(
+                '{"version":1,"features":{"deepl_translation":true},'
+                '"translation":{"deepl_auth_key":"secret"}}',
+                encoding="utf-8",
+            )
+
+            result = app_config.load_config(path)
+
+        self.assertEqual(result["version"], app_config.CONFIG_VERSION)
+        self.assertEqual(result["translation"]["provider"], "deepl")
 
     def test_enabled_custom_app_requires_executable(self) -> None:
         config = valid_config()

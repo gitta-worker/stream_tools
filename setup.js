@@ -3,12 +3,18 @@
 const form = document.querySelector("#setup-form");
 const message = document.querySelector("#message");
 const keyStatus = document.querySelector("#key-status");
-const microphoneList = document.querySelector("#microphones");
+const microphoneSelect = document.querySelector("#microphone-select");
+const microphoneHelp = document.querySelector("#microphone-help");
 const microphoneButton = document.querySelector("#load-microphones");
+const translationProvider = document.querySelector("#translation-provider");
+const googleWarning = document.querySelector("#google-warning");
+const deeplFields = document.querySelector("#deepl-fields");
 const customAppsContainer = document.querySelector("#custom-apps");
 const customAppTemplate = document.querySelector("#custom-app-template");
 const addCustomAppButton = document.querySelector("#add-custom-app");
 let config = null;
+let microphones = [];
+let microphonesLoaded = false;
 
 function getValue(object, path) {
     return path.split(".").reduce((value, key) => value[key], object);
@@ -21,8 +27,23 @@ function setValue(object, path, value) {
     parent[lastKey] = value;
 }
 
+function updateConditionalUi() {
+    const speechEnabled = form.querySelector('[data-path="features.speech_recognition"]').checked;
+    for (const field of document.querySelectorAll("#speech-section input, #speech-section select")) {
+        field.disabled = !speechEnabled;
+    }
+    microphoneButton.disabled = !speechEnabled;
+
+    const provider = translationProvider.value;
+    googleWarning.hidden = provider !== "google";
+    deeplFields.hidden = provider !== "deepl";
+}
+
 function populateForm() {
     for (const field of form.querySelectorAll("[data-path]")) {
+        if (field === microphoneSelect) {
+            continue;
+        }
         const value = getValue(config, field.dataset.path);
         if (field.type === "checkbox") {
             field.checked = value;
@@ -36,6 +57,7 @@ function populateForm() {
         ? "認証キーは保存済みです。変更する場合だけ入力してください。"
         : "認証キーはまだ保存されていません。";
     renderCustomApps(config.custom_apps ?? []);
+    updateConditionalUi();
 }
 
 function addCustomAppRow(customApp = {}) {
@@ -73,19 +95,84 @@ function collectCustomApps() {
 
 function collectForm() {
     for (const field of form.querySelectorAll("[data-path]")) {
+        if (field === microphoneSelect && !microphonesLoaded) {
+            continue;
+        }
         let value;
         if (field.type === "checkbox") {
             value = field.checked;
-        } else if (field.type === "number") {
+        } else if (field.type === "number" || field === microphoneSelect) {
             value = field.value === "" ? null : Number(field.value);
         } else {
             value = field.value.trim();
         }
         setValue(config, field.dataset.path, value);
     }
+    if (microphonesLoaded) {
+        const selectedMicrophone = microphones.find(
+            ({ index }) => index === config.speech.microphone_device_index,
+        );
+        config.speech.microphone_device_name = selectedMicrophone?.name ?? "";
+    }
     config.custom_apps = collectCustomApps();
     delete config.translation.deepl_auth_key_configured;
     return config;
+}
+
+function selectConfiguredMicrophone() {
+    const configuredIndex = config.speech.microphone_device_index;
+    const configuredName = config.speech.microphone_device_name.trim().toLocaleLowerCase();
+    const match = microphones.find(({ index, name }) =>
+        index === configuredIndex
+        || (configuredIndex === null
+            && configuredName
+            && name.toLocaleLowerCase().includes(configuredName)),
+    );
+    microphoneSelect.value = match ? String(match.index) : "";
+    if (!match && (configuredIndex !== null || configuredName)) {
+        microphoneHelp.textContent = "保存済みのマイクが見つからないため、Windowsの既定入力を使用します。";
+    }
+}
+
+async function loadMicrophones({ quiet = false } = {}) {
+    microphoneButton.disabled = true;
+    if (!quiet) {
+        message.className = "";
+        message.textContent = "入力デバイスを確認しています…";
+    }
+    try {
+        const response = await fetch("/api/microphones", { cache: "no-store" });
+        const result = await response.json();
+        if (!response.ok) {
+            throw new Error(result.error ?? "マイク一覧を取得できませんでした。");
+        }
+        microphones = result.microphones;
+        microphonesLoaded = true;
+        const options = [new Option("Windowsの既定の入力デバイス", "")];
+        for (const microphone of microphones) {
+            const suffix = microphone.is_default ? "（現在の既定）" : "";
+            options.push(new Option(
+                `${microphone.index}: ${microphone.name} ${suffix}`.trim(),
+                microphone.index,
+            ));
+        }
+        microphoneSelect.replaceChildren(...options);
+        selectConfiguredMicrophone();
+        microphoneHelp.textContent = microphones.length
+            ? `入力可能なデバイスを${microphones.length}件取得しました。番号はPC内での識別番号です。`
+            : "入力可能なマイクが見つかりませんでした。Windowsのサウンド設定を確認してください。";
+        if (!quiet) {
+            message.textContent = "マイク一覧を更新しました。";
+        }
+    } catch (error) {
+        microphoneHelp.textContent = error.message;
+        if (!quiet) {
+            message.className = "error";
+            message.textContent = error.message;
+        }
+    } finally {
+        updateConditionalUi();
+    }
 }
 
 async function loadConfig() {
@@ -95,7 +182,16 @@ async function loadConfig() {
     }
     config = await response.json();
     populateForm();
+    if (config.features.speech_recognition) {
+        await loadMicrophones({ quiet: true });
+    }
 }
+
+form.addEventListener("change", (event) => {
+    if (event.target.matches('[data-path="features.speech_recognition"], #translation-provider')) {
+        updateConditionalUi();
+    }
+});
 
 form.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -113,6 +209,7 @@ form.addEventListener("submit", async (event) => {
         }
         config = result.config;
         populateForm();
+        selectConfiguredMicrophone();
         message.className = "success";
         message.textContent = "保存しました。設定を反映するにはランチャーを再起動してください。";
     } catch (error) {
@@ -121,31 +218,7 @@ form.addEventListener("submit", async (event) => {
     }
 });
 
-microphoneButton.addEventListener("click", async () => {
-    microphoneButton.disabled = true;
-    message.textContent = "マイクを確認しています…";
-    try {
-        const response = await fetch("/api/microphones", { cache: "no-store" });
-        const result = await response.json();
-        if (!response.ok) {
-            throw new Error(result.error ?? "マイク一覧を取得できませんでした。");
-        }
-        microphoneList.replaceChildren(
-            ...result.microphones.map(({ index, name }) => {
-                const option = document.createElement("option");
-                option.value = name;
-                option.label = `${index}: ${name}`;
-                return option;
-            }),
-        );
-        message.textContent = `${result.microphones.length}件のマイクを取得しました。`;
-    } catch (error) {
-        message.className = "error";
-        message.textContent = error.message;
-    } finally {
-        microphoneButton.disabled = false;
-    }
-});
+microphoneButton.addEventListener("click", () => loadMicrophones());
 
 addCustomAppButton.addEventListener("click", () => addCustomAppRow());
 

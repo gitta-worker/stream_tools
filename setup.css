@@ -73,7 +73,8 @@ label {
     background: #172838;
 }
 
-input:not([type="checkbox"]) {
+input:not([type="checkbox"]),
+select {
     box-sizing: border-box;
     width: 100%;
     padding: 10px 12px;
@@ -81,6 +82,54 @@ input:not([type="checkbox"]) {
     border-radius: 7px;
     background: #0b141d;
     color: inherit;
+}
+
+select:disabled,
+input:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.legend {
+    line-height: 2;
+}
+
+.badge {
+    display: inline-block;
+    padding: 2px 7px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 800;
+    vertical-align: middle;
+}
+
+.badge.required {
+    background: #b43d4c;
+    color: #fff;
+}
+
+.badge.conditional {
+    background: #735b22;
+    color: #ffe9a6;
+}
+
+.badge.optional {
+    background: #29465e;
+    color: #cdeaff;
+}
+
+.notice {
+    margin: 12px 0 0;
+    padding: 11px 13px;
+    border-left: 4px solid #e8b64c;
+    border-radius: 4px;
+    background: #302819;
+    color: #ffe7ac;
+    font-size: 13px;
+}
+
+[hidden] {
+    display: none !important;
 }
 
 button,

@@ -3,8 +3,10 @@ import http.client
 import json
 import tempfile
 import threading
+import types
 import unittest
 from pathlib import Path
+from unittest import mock
 
 import app_config
 import translation_server
@@ -34,6 +36,69 @@ class TranslationStateTests(unittest.TestCase):
         self.assertEqual(state.snapshot()["status"], "starting")
 
 
+class TranslationFunctionTests(unittest.TestCase):
+    def test_no_translation_provider_returns_empty_text(self) -> None:
+        config = copy.deepcopy(app_config.DEFAULT_CONFIG)
+
+        self.assertEqual(translation_server.translate_text("こんにちは", config), "")
+
+    def test_google_provider_uses_keyless_translator(self) -> None:
+        config = copy.deepcopy(app_config.DEFAULT_CONFIG)
+        config["translation"]["provider"] = "google"
+
+        with mock.patch.object(
+            translation_server,
+            "translate_with_google",
+            return_value="Hello",
+        ) as translator:
+            result = translation_server.translate_text("こんにちは", config)
+
+        self.assertEqual(result, "Hello")
+        translator.assert_called_once_with("こんにちは")
+
+    def test_keyless_google_response_is_parsed(self) -> None:
+        response = mock.MagicMock()
+        response.__enter__.return_value.read.return_value = b'["Hello"]'
+
+        with mock.patch("urllib.request.urlopen", return_value=response):
+            result = translation_server.translate_with_google("こんにちは")
+
+        self.assertEqual(result, "Hello")
+
+    def test_microphone_list_only_contains_input_devices(self) -> None:
+        class FakeAudio:
+            def get_default_input_device_info(self) -> dict:
+                return {"index": 2, "hostApi": 0}
+
+            def get_device_count(self) -> int:
+                return 3
+
+            def get_device_info_by_index(self, index: int) -> dict:
+                return (
+                    {"name": "Speakers", "maxInputChannels": 0, "hostApi": 0},
+                    {"name": "USB Mic", "maxInputChannels": 1, "hostApi": 1},
+                    {"name": "Audio Interface", "maxInputChannels": 2, "hostApi": 0},
+                )[index]
+
+            def get_host_api_info_by_index(self, index: int) -> dict:
+                return {"name": ("MME", "WASAPI")[index]}
+
+            def terminate(self) -> None:
+                return
+
+        fake_pyaudio = types.SimpleNamespace(PyAudio=FakeAudio)
+        fake_sr = types.SimpleNamespace(
+            Microphone=types.SimpleNamespace(get_pyaudio=lambda: fake_pyaudio)
+        )
+
+        with mock.patch.dict("sys.modules", {"speech_recognition": fake_sr}):
+            result = translation_server.microphone_names()
+
+        self.assertEqual([device["index"] for device in result], [2])
+        self.assertTrue(result[0]["is_default"])
+        self.assertEqual(result[0]["host_api"], "MME")
+
+
 class TranslationHandlerTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -42,6 +107,7 @@ class TranslationHandlerTests(unittest.TestCase):
         cls.original_runtime_config = translation_server.runtime_config
         cls.config_path = Path(cls.temporary_directory.name) / "config.json"
         cls.config = copy.deepcopy(app_config.DEFAULT_CONFIG)
+        cls.config["translation"]["provider"] = "deepl"
         cls.config["translation"]["deepl_auth_key"] = "test-secret"
         cls.config["apps"].update(
             {

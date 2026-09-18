@@ -7,18 +7,17 @@ from pathlib import Path
 from typing import Any
 
 
-CONFIG_VERSION = 1
+CONFIG_VERSION = 2
 
 DEFAULT_CONFIG: dict[str, Any] = {
     "version": CONFIG_VERSION,
     "features": {
         "speech_recognition": True,
-        "deepl_translation": True,
         "show_japanese": True,
         "show_english": True,
-        "launch_onecomme": True,
-        "launch_tanuesa": True,
-        "launch_obs": True,
+        "launch_onecomme": False,
+        "launch_tanuesa": False,
+        "launch_obs": False,
     },
     "speech": {
         "microphone_device_name": "",
@@ -30,6 +29,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "phrase_time_limit": 20,
     },
     "translation": {
+        "provider": "none",
         "deepl_auth_key": "",
         "deepl_api_url": "",
     },
@@ -70,7 +70,9 @@ def load_config(path: Path) -> dict[str, Any]:
         raise ConfigError(f"設定ファイルを読み込めません: {exc}") from exc
     if not isinstance(payload, dict):
         raise ConfigError("設定ファイルの最上位はJSONオブジェクトである必要があります")
+    _migrate_config(payload)
     _deep_merge(config, payload)
+    config["version"] = CONFIG_VERSION
     validate_config(config)
     return config
 
@@ -93,6 +95,7 @@ def merge_submitted_config(
         raise ConfigError("送信された設定がJSONオブジェクトではありません")
     merged = copy.deepcopy(DEFAULT_CONFIG)
     _deep_merge(merged, submitted)
+    merged["features"].pop("deepl_translation", None)
 
     submitted_key = str(
         submitted.get("translation", {}).get("deepl_auth_key", "")
@@ -104,6 +107,18 @@ def merge_submitted_config(
     merged["version"] = CONFIG_VERSION
     validate_config(merged)
     return merged
+
+
+def _migrate_config(config: dict[str, Any]) -> None:
+    """Upgrade older in-memory configuration without rewriting the file."""
+    translation = config.setdefault("translation", {})
+    if not isinstance(translation, dict) or "provider" in translation:
+        return
+    features = config.get("features", {})
+    legacy_deepl_enabled = (
+        isinstance(features, dict) and features.get("deepl_translation") is True
+    )
+    translation["provider"] = "deepl" if legacy_deepl_enabled else "none"
 
 
 def public_config(config: dict[str, Any]) -> dict[str, Any]:
@@ -143,6 +158,10 @@ def validate_config(config: dict[str, Any]) -> None:
         if not isinstance(features.get(name), bool):
             raise ConfigError(f"features.{name} はtrueまたはfalseで指定してください")
 
+    provider = translation.get("provider")
+    if provider not in {"none", "deepl", "google"}:
+        raise ConfigError("translation.provider は none、deepl、google のいずれかです")
+
     numeric_rules = {
         "ambient_noise_duration": (0.0, 30.0),
         "pause_threshold": (0.1, 10.0),
@@ -180,7 +199,7 @@ def validate_config(config: dict[str, Any]) -> None:
         (
             "translation",
             translation,
-            ("deepl_auth_key", "deepl_api_url"),
+            ("provider", "deepl_auth_key", "deepl_api_url"),
         ),
         (
             "apps",
@@ -198,7 +217,7 @@ def validate_config(config: dict[str, Any]) -> None:
                 raise ConfigError(f"{section_name}.{name} は文字列で指定してください")
 
     required_app_paths = {
-        "launch_obs": ("obs_exe", "obs_profile"),
+        "launch_obs": ("obs_exe",),
         "launch_onecomme": ("onecomme_exe",),
         "launch_tanuesa": ("tanuesa_exe",),
     }
@@ -210,7 +229,7 @@ def validate_config(config: dict[str, Any]) -> None:
                         f"{feature_name}を使用する場合はapps.{path_name}が必要です"
                     )
 
-    if features["deepl_translation"] and not translation["deepl_auth_key"].strip():
+    if provider == "deepl" and not translation["deepl_auth_key"].strip():
         raise ConfigError(
             "DeepL翻訳を使用する場合はtranslation.deepl_auth_keyが必要です"
         )

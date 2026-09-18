@@ -1,8 +1,7 @@
 {
-  "version": 1,
+  "version": 2,
   "features": {
     "speech_recognition": true,
-    "deepl_translation": false,
     "show_japanese": true,
     "show_english": true,
     "launch_onecomme": false,
@@ -19,6 +18,7 @@
     "phrase_time_limit": 20
   },
   "translation": {
+    "provider": "none",
     "deepl_auth_key": "",
     "deepl_api_url": ""
   },

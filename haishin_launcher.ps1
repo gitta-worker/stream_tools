@@ -134,7 +134,8 @@ $obsProfile = $null
 if ($launchObs) {
     $obsExe = Resolve-ConfiguredPath (Get-RequiredConfigValue -Section $apps -Name 'obs_exe' -DisplayName 'apps.obs_exe')
     $obsDir = Split-Path -Parent $obsExe
-    $obsProfile = Get-RequiredConfigValue -Section $apps -Name 'obs_profile' -DisplayName 'apps.obs_profile'
+    $obsProfileProperty = $apps.PSObject.Properties['obs_profile']
+    $obsProfile = if ($null -eq $obsProfileProperty) { '' } else { [string]$obsProfileProperty.Value }
 }
 
 $oneCommeExe = $null
@@ -184,6 +185,19 @@ if ($null -ne $config.PSObject.Properties['custom_apps']) {
 
 $translationPython = Join-Path $appDir '.venv-translation\Scripts\python.exe'
 $translationServer = Join-Path $appDir 'translation_server.py'
+$translationExecutable = Join-Path $appDir 'translation_server.exe'
+$translationFile = $null
+$translationArguments = @()
+if (Test-Path -LiteralPath $translationExecutable -PathType Leaf) {
+    $translationFile = $translationExecutable
+}
+elseif ((Test-Path -LiteralPath $translationPython -PathType Leaf) -and (Test-Path -LiteralPath $translationServer -PathType Leaf)) {
+    $translationFile = $translationPython
+    $translationArguments = @($translationServer)
+}
+else {
+    throw 'Translation runtime was not found. Use the Windows release package, or run setup.bat with Python 3 installed.'
+}
 
 function New-KillOnCloseJob {
     $handle = [HaishinJobObject]::CreateJobObject([IntPtr]::Zero, $null)
@@ -314,8 +328,10 @@ try {
         foreach ($customApp in $customApps) {
             $allFound = (Test-LaunchFile -Name $customApp.Name -Path $customApp.Exe) -and $allFound
         }
-        $allFound = (Test-LaunchFile -Name 'Translation Python' -Path $translationPython) -and $allFound
-        $allFound = (Test-LaunchFile -Name 'Translation server' -Path $translationServer) -and $allFound
+        $allFound = (Test-LaunchFile -Name 'Translation runtime' -Path $translationFile) -and $allFound
+        if ($translationArguments.Count -gt 0) {
+            $allFound = (Test-LaunchFile -Name 'Translation server source' -Path $translationServer) -and $allFound
+        }
 
         if (-not $allFound) {
             throw 'One or more launch files are missing.'
@@ -333,13 +349,14 @@ try {
     if ($launchTanuEsa) {
         Start-ManagedProcess -Name 'TanuEsa3' -FilePath $tanuEsaExe -WorkingDirectory $tanuEsaDir
     }
-    Start-ManagedProcess -Name 'Translation Server' -FilePath $translationPython -WorkingDirectory $appDir -ArgumentList @($translationServer)
+    Start-ManagedProcess -Name 'Translation Server' -FilePath $translationFile -WorkingDirectory $appDir -ArgumentList $translationArguments
     foreach ($customApp in $customApps) {
         Start-ManagedProcess -Name $customApp.Name -FilePath $customApp.Exe -WorkingDirectory $customApp.WorkingDirectory -ArgumentList $customApp.Arguments
     }
     if ($launchObs) {
         Start-Sleep -Seconds 2
-        Start-ManagedProcess -Name 'OBS Studio' -FilePath $obsExe -WorkingDirectory $obsDir -ArgumentList @('--profile', $obsProfile)
+        $obsArguments = if ([string]::IsNullOrWhiteSpace($obsProfile)) { @() } else { @('--profile', $obsProfile) }
+        Start-ManagedProcess -Name 'OBS Studio' -FilePath $obsExe -WorkingDirectory $obsDir -ArgumentList $obsArguments
     }
 
     Write-Host ''
