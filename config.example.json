@@ -7,7 +7,6 @@
     "show_english": true,
     "launch_onecomme": false,
     "launch_tanuesa": false,
-    "launch_edo_speech": false,
     "launch_obs": false
   },
   "speech": {
@@ -31,7 +30,6 @@
     "obs_exe": "C:\\Program Files\\obs-studio\\bin\\64bit\\obs64.exe",
     "obs_profile": "",
     "onecomme_exe": "",
-    "tanuesa_exe": "",
-    "edo_plugin_dir": "%APPDATA%\\onecomme\\plugins\\edo-speech"
+    "tanuesa_exe": ""
   }
 }

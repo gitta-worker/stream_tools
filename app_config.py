@@ -18,7 +18,6 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "show_english": True,
         "launch_onecomme": True,
         "launch_tanuesa": True,
-        "launch_edo_speech": True,
         "launch_obs": True,
     },
     "speech": {
@@ -43,7 +42,6 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "obs_profile": "",
         "onecomme_exe": "",
         "tanuesa_exe": "",
-        "edo_plugin_dir": r"%APPDATA%\onecomme\plugins\edo-speech",
     },
 }
 
@@ -188,7 +186,6 @@ def validate_config(config: dict[str, Any]) -> None:
                 "obs_profile",
                 "onecomme_exe",
                 "tanuesa_exe",
-                "edo_plugin_dir",
             ),
         ),
     ):
@@ -200,7 +197,6 @@ def validate_config(config: dict[str, Any]) -> None:
         "launch_obs": ("obs_exe", "obs_profile"),
         "launch_onecomme": ("onecomme_exe",),
         "launch_tanuesa": ("tanuesa_exe",),
-        "launch_edo_speech": ("edo_plugin_dir",),
     }
     for feature_name, path_names in required_app_paths.items():
         if features[feature_name]:

@@ -126,7 +126,6 @@ $features = $config.features
 $apps = $config.apps
 $launchOneComme = [bool]$features.launch_onecomme
 $launchTanuEsa = [bool]$features.launch_tanuesa
-$launchEdoSpeech = [bool]$features.launch_edo_speech
 $launchObs = [bool]$features.launch_obs
 
 $obsExe = $null
@@ -148,15 +147,6 @@ $tanuEsaDir = $null
 if ($launchTanuEsa) {
     $tanuEsaExe = Resolve-ConfiguredPath (Get-RequiredConfigValue -Section $apps -Name 'tanuesa_exe' -DisplayName 'apps.tanuesa_exe')
     $tanuEsaDir = Split-Path -Parent $tanuEsaExe
-}
-
-$edoPluginDir = $null
-$edoPython = $null
-$edoBridge = $null
-if ($launchEdoSpeech) {
-    $edoPluginDir = Resolve-ConfiguredPath (Get-RequiredConfigValue -Section $apps -Name 'edo_plugin_dir' -DisplayName 'apps.edo_plugin_dir')
-    $edoPython = Join-Path $edoPluginDir '.venv\Scripts\python.exe'
-    $edoBridge = Join-Path $edoPluginDir 'eventsub_bridge.py'
 }
 
 $translationPython = Join-Path $appDir '.venv-translation\Scripts\python.exe'
@@ -290,10 +280,6 @@ try {
         }
         $allFound = (Test-LaunchFile -Name 'Translation Python' -Path $translationPython) -and $allFound
         $allFound = (Test-LaunchFile -Name 'Translation server' -Path $translationServer) -and $allFound
-        if ($launchEdoSpeech) {
-            $allFound = (Test-LaunchFile -Name 'edo-speech Python' -Path $edoPython) -and $allFound
-            $allFound = (Test-LaunchFile -Name 'edo-speech bridge' -Path $edoBridge) -and $allFound
-        }
 
         if (-not $allFound) {
             throw 'One or more launch files are missing.'
@@ -312,10 +298,6 @@ try {
         Start-ManagedProcess -Name 'TanuEsa3' -FilePath $tanuEsaExe -WorkingDirectory $tanuEsaDir
     }
     Start-ManagedProcess -Name 'Translation Server' -FilePath $translationPython -WorkingDirectory $appDir -ArgumentList @($translationServer)
-    if ($launchEdoSpeech) {
-        Start-ManagedProcess -Name 'edo-bridge' -FilePath $edoPython -WorkingDirectory $edoPluginDir -ArgumentList @($edoBridge)
-    }
-
     if ($launchObs) {
         Start-Sleep -Seconds 2
         Start-ManagedProcess -Name 'OBS Studio' -FilePath $obsExe -WorkingDirectory $obsDir -ArgumentList @('--profile', $obsProfile)

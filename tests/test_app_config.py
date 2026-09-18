@@ -50,7 +50,6 @@ class AppConfigTests(unittest.TestCase):
             "launch_obs",
             "launch_onecomme",
             "launch_tanuesa",
-            "launch_edo_speech",
         ):
             config["features"][name] = False
         config["apps"] = {name: "" for name in config["apps"]}
