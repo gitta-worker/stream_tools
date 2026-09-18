@@ -43,6 +43,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "onecomme_exe": "",
         "tanuesa_exe": "",
     },
+    "custom_apps": [],
 }
 
 
@@ -134,6 +135,9 @@ def validate_config(config: dict[str, Any]) -> None:
     translation = _require_section(config, "translation")
     server = _require_section(config, "server")
     apps = _require_section(config, "apps")
+    custom_apps = config.get("custom_apps")
+    if not isinstance(custom_apps, list):
+        raise ConfigError("custom_apps は配列で指定してください")
 
     for name in DEFAULT_CONFIG["features"]:
         if not isinstance(features.get(name), bool):
@@ -210,3 +214,17 @@ def validate_config(config: dict[str, Any]) -> None:
         raise ConfigError(
             "DeepL翻訳を使用する場合はtranslation.deepl_auth_keyが必要です"
         )
+
+    for index, custom_app in enumerate(custom_apps):
+        if not isinstance(custom_app, dict):
+            raise ConfigError(f"custom_apps[{index}] はJSONオブジェクトで指定してください")
+        if not isinstance(custom_app.get("enabled"), bool):
+            raise ConfigError(f"custom_apps[{index}].enabled はtrueまたはfalseです")
+        for name in ("name", "executable", "working_directory", "arguments"):
+            if not isinstance(custom_app.get(name), str):
+                raise ConfigError(f"custom_apps[{index}].{name} は文字列で指定してください")
+        if custom_app["enabled"]:
+            if not custom_app["name"].strip():
+                raise ConfigError(f"custom_apps[{index}].name が必要です")
+            if not custom_app["executable"].strip():
+                raise ConfigError(f"custom_apps[{index}].executable が必要です")

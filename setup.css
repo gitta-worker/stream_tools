@@ -101,6 +101,33 @@ button.secondary {
     color: #e8eef5;
 }
 
+button.danger {
+    padding: 7px 12px;
+    background: #59303a;
+    color: #ffd9df;
+}
+
+.custom-app-row {
+    margin-top: 18px;
+    padding: 18px;
+    border: 1px solid #314c63;
+    border-radius: 10px;
+    background: #101e2a;
+}
+
+.custom-app-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.custom-app-heading .custom-enabled {
+    display: flex;
+    align-items: center;
+    margin: 0;
+}
+
 .hint {
     margin: 8px 0 0;
     color: #8ca4b8;

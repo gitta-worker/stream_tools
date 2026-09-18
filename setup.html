@@ -62,6 +62,17 @@
             </section>
 
             <section>
+                <div class="section-heading">
+                    <div>
+                        <h2>追加アプリ</h2>
+                        <p class="hint">配信時に一緒に起動したい任意のアプリを追加できます。</p>
+                    </div>
+                    <button type="button" id="add-custom-app" class="secondary">起動欄を追加</button>
+                </div>
+                <div id="custom-apps"></div>
+            </section>
+
+            <section>
                 <h2>ローカルサーバー</h2>
                 <div class="field-grid">
                     <label>ホスト<input data-path="server.host" readonly></label>
@@ -75,6 +86,19 @@
             </div>
             <p id="message" role="status"></p>
         </form>
+
+        <template id="custom-app-template">
+            <div class="custom-app-row">
+                <div class="custom-app-heading">
+                    <label class="custom-enabled"><input type="checkbox" data-custom="enabled"> このアプリを起動</label>
+                    <button type="button" class="remove-custom-app danger">削除</button>
+                </div>
+                <label>表示名<input data-custom="name" placeholder="例: コメント読み上げ"></label>
+                <label>実行ファイル<input data-custom="executable" placeholder="C:\\path\\to\\app.exe"></label>
+                <label>作業フォルダ<input data-custom="working_directory" placeholder="空欄なら実行ファイルのフォルダ"></label>
+                <label>起動引数<input data-custom="arguments" placeholder="必要な場合だけ指定"></label>
+            </div>
+        </template>
     </main>
 </body>
 </html>

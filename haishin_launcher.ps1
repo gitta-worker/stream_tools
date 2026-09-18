@@ -149,6 +149,39 @@ if ($launchTanuEsa) {
     $tanuEsaDir = Split-Path -Parent $tanuEsaExe
 }
 
+$customApps = New-Object 'System.Collections.Generic.List[object]'
+if ($null -ne $config.PSObject.Properties['custom_apps']) {
+    foreach ($customApp in @($config.custom_apps)) {
+        if (-not [bool]$customApp.enabled) {
+            continue
+        }
+
+        $customName = Get-RequiredConfigValue -Section $customApp -Name 'name' -DisplayName 'custom_apps.name'
+        $customExe = Resolve-ConfiguredPath (Get-RequiredConfigValue -Section $customApp -Name 'executable' -DisplayName "custom_apps[$customName].executable")
+        $customWorkingDirectoryText = [string]$customApp.working_directory
+        $customWorkingDirectory = if ([string]::IsNullOrWhiteSpace($customWorkingDirectoryText)) {
+            Split-Path -Parent $customExe
+        }
+        else {
+            Resolve-ConfiguredPath $customWorkingDirectoryText
+        }
+        $customArgumentsText = [Environment]::ExpandEnvironmentVariables([string]$customApp.arguments)
+        $customArguments = if ([string]::IsNullOrWhiteSpace($customArgumentsText)) {
+            @()
+        }
+        else {
+            @($customArgumentsText)
+        }
+
+        $customApps.Add([pscustomobject]@{
+            Name = $customName
+            Exe = $customExe
+            WorkingDirectory = $customWorkingDirectory
+            Arguments = $customArguments
+        })
+    }
+}
+
 $translationPython = Join-Path $appDir '.venv-translation\Scripts\python.exe'
 $translationServer = Join-Path $appDir 'translation_server.py'
 
@@ -278,6 +311,9 @@ try {
         if ($launchObs) {
             $allFound = (Test-LaunchFile -Name 'OBS Studio' -Path $obsExe) -and $allFound
         }
+        foreach ($customApp in $customApps) {
+            $allFound = (Test-LaunchFile -Name $customApp.Name -Path $customApp.Exe) -and $allFound
+        }
         $allFound = (Test-LaunchFile -Name 'Translation Python' -Path $translationPython) -and $allFound
         $allFound = (Test-LaunchFile -Name 'Translation server' -Path $translationServer) -and $allFound
 
@@ -298,6 +334,9 @@ try {
         Start-ManagedProcess -Name 'TanuEsa3' -FilePath $tanuEsaExe -WorkingDirectory $tanuEsaDir
     }
     Start-ManagedProcess -Name 'Translation Server' -FilePath $translationPython -WorkingDirectory $appDir -ArgumentList @($translationServer)
+    foreach ($customApp in $customApps) {
+        Start-ManagedProcess -Name $customApp.Name -FilePath $customApp.Exe -WorkingDirectory $customApp.WorkingDirectory -ArgumentList $customApp.Arguments
+    }
     if ($launchObs) {
         Start-Sleep -Seconds 2
         Start-ManagedProcess -Name 'OBS Studio' -FilePath $obsExe -WorkingDirectory $obsDir -ArgumentList @('--profile', $obsProfile)

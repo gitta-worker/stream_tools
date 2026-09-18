@@ -5,6 +5,9 @@ const message = document.querySelector("#message");
 const keyStatus = document.querySelector("#key-status");
 const microphoneList = document.querySelector("#microphones");
 const microphoneButton = document.querySelector("#load-microphones");
+const customAppsContainer = document.querySelector("#custom-apps");
+const customAppTemplate = document.querySelector("#custom-app-template");
+const addCustomAppButton = document.querySelector("#add-custom-app");
 let config = null;
 
 function getValue(object, path) {
@@ -32,6 +35,40 @@ function populateForm() {
     keyStatus.textContent = config.translation.deepl_auth_key_configured
         ? "認証キーは保存済みです。変更する場合だけ入力してください。"
         : "認証キーはまだ保存されていません。";
+    renderCustomApps(config.custom_apps ?? []);
+}
+
+function addCustomAppRow(customApp = {}) {
+    const row = customAppTemplate.content.firstElementChild.cloneNode(true);
+    for (const field of row.querySelectorAll("[data-custom]")) {
+        const value = customApp[field.dataset.custom];
+        if (field.type === "checkbox") {
+            field.checked = value ?? true;
+        } else {
+            field.value = value ?? "";
+        }
+    }
+    row.querySelector(".remove-custom-app").addEventListener("click", () => row.remove());
+    customAppsContainer.append(row);
+}
+
+function renderCustomApps(customApps) {
+    customAppsContainer.replaceChildren();
+    for (const customApp of customApps) {
+        addCustomAppRow(customApp);
+    }
+}
+
+function collectCustomApps() {
+    return [...customAppsContainer.querySelectorAll(".custom-app-row")].map((row) => {
+        const customApp = {};
+        for (const field of row.querySelectorAll("[data-custom]")) {
+            customApp[field.dataset.custom] = field.type === "checkbox"
+                ? field.checked
+                : field.value.trim();
+        }
+        return customApp;
+    });
 }
 
 function collectForm() {
@@ -46,6 +83,7 @@ function collectForm() {
         }
         setValue(config, field.dataset.path, value);
     }
+    config.custom_apps = collectCustomApps();
     delete config.translation.deepl_auth_key_configured;
     return config;
 }
@@ -108,6 +146,8 @@ microphoneButton.addEventListener("click", async () => {
         microphoneButton.disabled = false;
     }
 });
+
+addCustomAppButton.addEventListener("click", () => addCustomAppRow());
 
 loadConfig().catch((error) => {
     message.className = "error";

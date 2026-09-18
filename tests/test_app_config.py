@@ -63,6 +63,35 @@ class AppConfigTests(unittest.TestCase):
         with self.assertRaises(app_config.ConfigError):
             app_config.validate_config(config)
 
+    def test_enabled_custom_app_requires_executable(self) -> None:
+        config = valid_config()
+        config["custom_apps"] = [
+            {
+                "enabled": True,
+                "name": "custom",
+                "executable": "",
+                "working_directory": "",
+                "arguments": "",
+            }
+        ]
+
+        with self.assertRaises(app_config.ConfigError):
+            app_config.validate_config(config)
+
+    def test_disabled_custom_app_may_be_incomplete(self) -> None:
+        config = valid_config()
+        config["custom_apps"] = [
+            {
+                "enabled": False,
+                "name": "",
+                "executable": "",
+                "working_directory": "",
+                "arguments": "",
+            }
+        ]
+
+        app_config.validate_config(config)
+
 
 if __name__ == "__main__":
     unittest.main()
