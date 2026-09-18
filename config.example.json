@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "features": {
+    "speech_recognition": true,
+    "deepl_translation": false,
+    "show_japanese": true,
+    "show_english": true,
+    "launch_onecomme": false,
+    "launch_tanuesa": false,
+    "launch_edo_speech": false,
+    "launch_obs": false
+  },
+  "speech": {
+    "microphone_device_name": "",
+    "microphone_device_index": null,
+    "ambient_noise_duration": 3.0,
+    "pause_threshold": 1.2,
+    "non_speaking_duration": 0.8,
+    "phrase_threshold": 0.2,
+    "phrase_time_limit": 20
+  },
+  "translation": {
+    "deepl_auth_key": "",
+    "deepl_api_url": ""
+  },
+  "server": {
+    "host": "127.0.0.1",
+    "port": 5000
+  },
+  "apps": {
+    "obs_exe": "C:\\Program Files\\obs-studio\\bin\\64bit\\obs64.exe",
+    "obs_profile": "",
+    "onecomme_exe": "",
+    "tanuesa_exe": "",
+    "edo_plugin_dir": "%APPDATA%\\onecomme\\plugins\\edo-speech"
+  }
+}

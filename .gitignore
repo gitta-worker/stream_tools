@@ -1,0 +1,7 @@
+.env
+haishin.config.psd1
+config.json
+.venv-translation/
+.vs/
+__pycache__/
+*.pyc
